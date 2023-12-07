@@ -77,7 +77,7 @@ def initialize(args):
     os.environ["OMP_NUM_THREADS"] = str(args.nproc)
 
     # initialize the model with given args
-    model = whisper.load_model(args.model_size, device=args.device, compute_type=args.precision)
+    model = whisper.load_model(args.model_size, device=args.device)
 
     return model;
 
@@ -96,7 +96,6 @@ def main():
     parser.add_argument("--output_dir", "-o", help="Ouput directory", default=os.getcwd())
     parser.add_argument("--language", "-l", help="Language to be translated from", default='en', type=str)
     parser.add_argument("--beam_size", "-b", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
-    parser.add_argument("--precision", "-p", help="Precision to use to create the model", type=str, default="float32")
     parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", default="cuda")
     parser.add_argument("--model_size", "-s", help="Size of the model, default is large. For testing use tiny", default="large")
     parser.add_argument("--nproc", "-n", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
