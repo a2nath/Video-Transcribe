@@ -9,6 +9,11 @@ from typing import Iterator, TextIO
 # debug only
 from pdb import set_trace
 
+# Note:
+# by default large model is used and float32 precision
+#
+#
+
 def srt_format_timestamp(seconds: float):
     assert seconds >= 0, "non-negative timestamp expected"
     milliseconds = round(seconds * 1000.0)
@@ -24,14 +29,14 @@ def srt_format_timestamp(seconds: float):
 
     return (f"{hours}:") + f"{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
-def write_srt(transcript: Iterator[dict], file: TextIO):
+def write_srt(segments, file: TextIO):
     count = 0
-    for segment in transcript:
+    for segment in segments:
         count +=1
         print(
             f"{count}\n"
-            f"{srt_format_timestamp(segment['start'])} --> {srt_format_timestamp(segment['end'])}\n"
-            f"{segment['text'].replace('-->', '->').strip()}\n",
+            f"{srt_format_timestamp(segment.start)} --> {srt_format_timestamp(segment.end)}\n"
+            f"{segment.text.replace('-->', '->').strip()}\n",
             file=file,
             flush=True,
         )
@@ -78,8 +83,8 @@ def main():
     parser.add_argument("--output_dir", "-o", help="Ouput directory", default=getcwd())
     parser.add_argument("--language", "-l", help="Language to be translated from", default='en', type=str)
     parser.add_argument("--beam_size", "-b", help="Beam size parameter for whisper faster parameter", type=int, default=5)
-    parser.add_argument("--precision", "-p", help="Precision to use to create the model", type=str, default="float16")
-    parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", default="cpu")
+    parser.add_argument("--precision", "-p", help="Precision to use to create the model", type=str, default="float32")
+    parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", default="cuda")
     parser.add_argument("--model_size", "-s", help="Size of the model, default is large. For testing use tiny", default="large")
 
     args = parser.parse_args()
