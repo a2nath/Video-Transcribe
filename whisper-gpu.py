@@ -1,13 +1,12 @@
-from faster_whisper import WhisperModel as whisper
-import argparse
-from pathlib import Path
-import ffmpeg
-from os import getcwd, listdir, remove
+import os
 from os.path import isfile, join
+import psutil
+import ffmpeg
+import argparse
+from faster_whisper import WhisperModel as whisper
+from pathlib import Path
 from typing import Iterator, TextIO
 
-# debug only
-from pdb import set_trace
 
 # Note:
 # by default large model is used and float32 precision
@@ -55,22 +54,45 @@ def isAudioFile(file_suffix):
 
     return False
 
-def transcribe(args, videofile, audiofile = None):
+def transcribe(args, model, videofile, audiofile = None):
+
     if audiofile is None:
         audiofile = videofile
 
+    segments, stats = model.transcribe(audiofile, beam_size=args.beam_size, language=args.language)
+
+    print("\nBegin transcription:")
+    print("-------------------------------------------------------")
+    segments = list(segments)  # The transcription will actually run here.
+
+    print("Detected language '%s' with probability %f" % (stats.language, stats.language_probability))
+
+    # save SRT
+    print("\Creating subtitle file:")
+    print("-------------------------------------------------------")
+
+    with open(join(args.output_dir, Path(videofile).stem + f".{args.language}.srt"), "w") as srt:
+        write_srt(segments, file=srt)
+
+def initialize(args):
+    # cleanup the audio file that is no longer needed
+    if isfile("output.mp3"):
+        os.remove("output.mp3")
+
+    os.environ["OMP_NUM_THREADS"] = str(args.nproc)
+
+
+    # initialize the model with given args
     if args.device != "cpu":
         model = whisper(args.model_size, device=args.device, compute_type=args.precision)
     else:
         model = whisper(args.model_size, compute_type=args.precision)
 
-    segments, stats = model.transcribe(audiofile, beam_size=args.beam_size, language=args.language)
+    return model;
 
-    print("Detected language '%s' with probability %f" % (stats.language, stats.language_probability))
-
-    # save SRT
-    with open(join(args.output_dir, Path(videofile).stem + f".{args.language}.srt"), "w") as srt:
-        write_srt(segments, file=srt)
+def close():
+    if isfile("output.mp3"):
+        os.remove("output.mp3")
 
 def main():
 
@@ -78,24 +100,27 @@ def main():
     audio_files = []
 
     parser = argparse.ArgumentParser("Generates subtitiles of the video file as an input")
-    parser.add_argument("--input_dir", "-i", help="Input directory where video files are", default=getcwd())
+    parser.add_argument("--input_dir", "-i", help="Input directory where video files are", default=os.getcwd())
     parser.add_argument("--filename", "-f", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
-    parser.add_argument("--output_dir", "-o", help="Ouput directory", default=getcwd())
+    parser.add_argument("--output_dir", "-o", help="Ouput directory", default=os.getcwd())
     parser.add_argument("--language", "-l", help="Language to be translated from", default='en', type=str)
-    parser.add_argument("--beam_size", "-b", help="Beam size parameter for whisper faster parameter", type=int, default=5)
+    parser.add_argument("--beam_size", "-b", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
     parser.add_argument("--precision", "-p", help="Precision to use to create the model", type=str, default="float32")
     parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", default="cuda")
     parser.add_argument("--model_size", "-s", help="Size of the model, default is large. For testing use tiny", default="large")
+    parser.add_argument("--nproc", "-s", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
 
     args = parser.parse_args()
     print("\nSettings as follows:")
-    print("----------------------")
+    print("-------------------------------------------------------")
 
     arguments = vars(args);
     for arg in arguments:
         print(arg, '\t', getattr(args, arg))
 
-    print("----------------------\n")
+    print("\nInitializing:")
+    print("-------------------------------------------------------")
+    model = initialize(args);
 
     if args.filename is not None:
         if isVideoFile(Path(args.filename.name).suffix) == True:
@@ -104,7 +129,7 @@ def main():
             audio_files.append(args.filename.name)
 
     elif args.input_dir is not None:
-        for f in listdir(args.input_dir):
+        for f in os.listdir(args.input_dir):
             if isfile(join(args.input_dir, f)) and isVideoFile(Path(f).suffix) == True:
                 video_files.append(f);
             elif isfile(join(args.input_dir, f)) and isAudioFile(Path(f).suffix) == True:
@@ -117,15 +142,15 @@ def main():
     # convert the videofile into audiofile before processing
     for videoFile in video_files:
         ffmpeg.input(videoFile).output("output.mp3").run()
-        transcribe(args, videoFile, "output.mp3")
+        transcribe(args, model, videoFile, "output.mp3")
 
     # convert the audiofile before processing
     for audiofile in audio_files:
-        transcribe(args, audiofile)
+        transcribe(args, model, audiofile)
 
     # cleanup the audio file that is no longer needed
-    if isfile("output.mp3"):
-        remove("output.mp3")
+    close()
+
     return 0
 
 if __name__ == "__main__":
