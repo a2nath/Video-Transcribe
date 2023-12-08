@@ -86,7 +86,7 @@ def initialize(args):
     print("\nInitializing:")
     print("-------------------------------------------------------")
 
-   # cleanup the audio file that is no longer needed
+    # cleanup the audio file that is no longer needed
     if isfile("output.mp3"):
         os.remove("output.mp3")
 
@@ -97,7 +97,7 @@ def initialize(args):
     model = whisper(args.model_size, device=args.device, compute_type=args.precision)
     return model;
 
-def close(prog_duration):
+def close():
 
     if isfile("output.mp3"):
         os.remove("output.mp3")
