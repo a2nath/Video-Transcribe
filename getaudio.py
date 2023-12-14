@@ -33,19 +33,19 @@ def main():
     args = parser.parse_args()
     args.input_dir = str(Path(args.input_dir).resolve())
 
-    # make the directory is missing
-    if args.output_dir is not None:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    # make the directory if missing
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     if args.filename is not None:
-        args.filename = args.filename.name
-        if isVideoFile(Path(args.filename).suffix) == True:
-            video_files.append(PurePath(args.input_dir, filename))
+        args.filename = Path(args.input_dir, args.filename.name)
+        if isVideoFile(args.filename.suffix) == True:
+            video_files.append(str(args.filename))
 
     elif args.input_dir is not None:
-        for f in os.listdir(args.input_dir):
-            if os.path.isfile(os.path.join(args.input_dir, f)) and isVideoFile(Path(f).suffix) == True:
-                video_files.append(PurePath(args.input_dir, f))
+        for filename in os.listdir(args.input_dir):
+            filename = Path(args.input_dir, filename)
+            if filename.is_file() and isVideoFile(filename.suffix) == True:
+                video_files.append(str(filename));
 
     if len(video_files) == 0:
         print("There were no files to process")
@@ -66,7 +66,7 @@ def main():
     print("-------------------------------------------------------")
 
     for videofile in video_files:
-        output_filename = str(PurePath(args.output_dir, videofile.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + args.format))
+        output_filename = str(Path(args.output_dir, videofile.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + args.format))
         print("\tOutput file", '\t', output_filename)
         ffmpeg.input(videofile).output(output_filename).run()
         print("\tDone")
