@@ -4,6 +4,7 @@ import argparse
 import psutil
 import ffmpeg
 import timeit
+import time
 from faster_whisper import WhisperModel as whisper
 from pathlib import Path
 from typing import Iterator, TextIO
@@ -17,6 +18,7 @@ sizes_supported = ["tiny", "base", "small", "medium", "large-v1", "large-v2", "l
 
 video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
 audio_supported = [".mp3", ".wave", ".aac", ".flac"]
+scrapfile = ""
 
 def srt_format_timestamp(seconds: float):
     assert seconds >= 0, "non-negative timestamp expected"
@@ -75,7 +77,7 @@ def transcribe(args, model, videofile, audiofile = None):
     print("\nDetected language '%s' with probability %f" % (stats.language, stats.language_probability))
 
     # save SRT
-    with open(join(args.output_dir, Path(videofile).stem + f".{args.language}.srt"), "w") as srt:
+    with open(join(args.output_dir, Path(videofile).stem + "." + time.strftime("%Y%m%d-%H%M%S") + f".{args.language}.srt"), "w") as srt:
         write_srt(segments, file=srt)
 
     print(videofile," took ","{:.1f}".format(timeit.default_timer() - start_time)," seconds")
@@ -87,8 +89,8 @@ def initialize(args):
     print("-------------------------------------------------------")
 
     # cleanup the audio file that is no longer needed
-    if isfile("output.mp3"):
-        os.remove("output.mp3")
+    if isfile(scrapfile):
+        os.remove(scrapfile)
 
     os.environ["OMP_NUM_THREADS"] = str(args.nproc)
 
@@ -99,8 +101,8 @@ def initialize(args):
 
 def close():
 
-    if isfile("output.mp3"):
-        os.remove("output.mp3")
+    if isfile(scrapfile):
+        os.remove(scrapfile)
 
     print("Done.")
 
@@ -121,20 +123,26 @@ def main():
     parser.add_argument("--nproc", "-n", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
 
     args = parser.parse_args()
+    args.input_dir = str(Path(args.input_dir).resolve())
+
+    # make the directory if missing
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    scrapfile = str(Path(args.output_dir, "output.mp3"))
 
     if args.filename is not None:
-        args.filename = args.filename.name
-        if isVideoFile(Path(args.filename).suffix) == True:
-            video_files.append(args.filename)
-        elif isAudioFile(Path(args.filename).suffix) == True:
-            audio_files.append(args.filename)
+        args.filename = Path(args.input_dir, args.filename.name)
+        if isVideoFile(args.filename.suffix) == True:
+            video_files.append(str(args.filename))
+        elif isAudioFile(args.filename.suffix) == True:
+            audio_files.append(str(args.filename))
 
     elif args.input_dir is not None:
-        for f in os.listdir(args.input_dir):
-            if isfile(join(args.input_dir, f)) and isVideoFile(Path(f).suffix) == True:
-                video_files.append(f);
-            elif isfile(join(args.input_dir, f)) and isAudioFile(Path(f).suffix) == True:
-                audio_files.append(f);
+        for filename in os.listdir(args.input_dir):
+            filename = Path(args.input_dir, filename)
+            if filename.is_file() and isVideoFile(filename.suffix) == True:
+                video_files.append(str(filename));
+            elif filename.is_file() and isAudioFile(filename.suffix) == True:
+                audio_files.append(str(filename));
 
     if len(video_files) == 0 and len(audio_files) == 0:
         print("There were no files to process")
@@ -153,8 +161,8 @@ def main():
 
     # convert the videofile into audiofile before processing
     for videoFile in video_files:
-        ffmpeg.input(videoFile).output("output.mp3").run()
-        transcribe(args, model, videoFile, "output.mp3")
+        ffmpeg.input(videoFile).output(scrapfile).run(overwrite_output=True)
+        transcribe(args, model, videoFile, scrapfile)
 
     # convert the audiofile before processing
     for audiofile in audio_files:
