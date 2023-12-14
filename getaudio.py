@@ -68,7 +68,7 @@ def main():
     for videofile in video_files:
         output_filename = str(PurePath(args.output_dir, videofile.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + args.format))
         print("\tOutput file", '\t', output_filename)
-        #ffmpeg.input(videofile).output(output_filename).run()
+        ffmpeg.input(videofile).output(output_filename).run()
         print("\tDone")
 
     print("\nFinished:")
