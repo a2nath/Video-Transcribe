@@ -39,13 +39,13 @@ def main():
     if args.filename is not None:
         args.filename = Path(args.input_dir, args.filename.name)
         if isVideoFile(args.filename.suffix) == True:
-            video_files.append(str(args.filename))
+            video_files.append(args.filename)
 
     elif args.input_dir is not None:
         for filename in os.listdir(args.input_dir):
             filename = Path(args.input_dir, filename)
             if filename.is_file() and isVideoFile(filename.suffix) == True:
-                video_files.append(str(filename));
+                video_files.append(filename);
 
     if len(video_files) == 0:
         print("There were no files to process")
@@ -68,7 +68,7 @@ def main():
     for videofile in video_files:
         output_filename = str(Path(args.output_dir, videofile.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + args.format))
         print("\tOutput file", '\t', output_filename)
-        ffmpeg.input(videofile).output(output_filename).run()
+        ffmpeg.input(str(videofile)).output(output_filename).run()
         print("\tDone")
 
     print("\nFinished:")
