@@ -25,16 +25,13 @@ def main():
 
     video_files = []
     parser = argparse.ArgumentParser("Generates audio of the video file as an input")
-    parser.add_argument("--input_dir", "-i", help="Input directory where video files are", default=os.getcwd())
-    parser.add_argument("--filename", "-f", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
-    parser.add_argument("--output_dir", "-o", help="Ouput directory", default=os.getcwd())
+    parser.add_argument("-i", "--input_dir", help="Input directory where video files are", default=os.getcwd())
+    parser.add_argument("-f", "--filename", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
+    parser.add_argument("-o", "--output_dir", help="Ouput directory")
     parser.add_argument("--format", help="Ouput format to produce", choices=audio_supported, default="mp3")
 
     args = parser.parse_args()
     args.input_dir = str(Path(args.input_dir).resolve())
-
-    # make the directory if missing
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     if args.filename is not None:
         args.filename = Path(args.input_dir, args.filename.name)
@@ -52,6 +49,11 @@ def main():
         exit(0)
     else:
         print("Found ", len(video_files), " files")
+        if args.output_dir is None:
+            args.output_dir = video_files[0].parents[0]
+
+    # make the directory if missing
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     print("\nSettings as follows:")
     print("-------------------------------------------------------")
