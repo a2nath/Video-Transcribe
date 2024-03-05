@@ -4,35 +4,24 @@ import argparse
 from pathlib import Path, PurePath
 import time
 
-video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
-audio_supported = [".mp3", ".wave", ".aac", ".flac"]
+video_supported = ["mkv", "webm", "mov",  "avi", "mp4"]
+audio_supported = ["mp3", "wave", "aac", "flac"]
 
 def isVideoFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in video_supported:
+	if file_suffix.split('.')[-1].lower() in video_supported:
 		return True
 
 	return False
 
 def isAudioFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in audio_supported:
+	if file_suffix.lower() in audio_supported:
 		return True
 
 	return False
 
-def main():
+def extract_audio(args):
 
 	video_files = []
-	parser = argparse.ArgumentParser("Generates audio of the video file as an input")
-	parser.add_argument("-i", "--input_dir", help="Input directory where video files are", default=os.getcwd())
-	parser.add_argument("-f", "--filename", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
-	parser.add_argument("-o", "--output_dir", help="Ouput directory")
-	parser.add_argument("--format", help="Ouput format to produce", choices=audio_supported, default="mp3")
-
-	args = parser.parse_args()
-	args.input_dir = str(Path(args.input_dir).resolve())
-
 	if args.filename is not None:
 		args.filename = Path(args.input_dir, args.filename.name)
 		if isVideoFile(args.filename.suffix) == True:
@@ -76,6 +65,17 @@ def main():
 	print("\nFinished:")
 	print("-------------------------------------------------------")
 
+def main():
+	parser = argparse.ArgumentParser("Generates audio of the video file as an input")
+	parser.add_argument("-i", "--input_dir", help="Input directory where video files are", default=os.getcwd())
+	parser.add_argument("-f", "--filename", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
+	parser.add_argument("-o", "--output_dir", help="Ouput directory")
+	parser.add_argument("--format", help="Ouput format to produce", choices=audio_supported, default="mp3")
+
+	args = parser.parse_args()
+	args.input_dir = str(Path(args.input_dir).resolve())
+
+	extract_audio(args)
 
 	# cleanup the audio file that is no longer needed
 	# close()
