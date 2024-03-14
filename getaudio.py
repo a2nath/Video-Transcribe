@@ -3,6 +3,7 @@ import os
 import argparse
 from pathlib import Path, PurePath
 import time
+import re
 
 video_supported = ["mkv", "webm", "mov",  "avi", "mp4"]
 audio_supported = ["mp3", "wave", "aac", "flac"]
@@ -18,6 +19,12 @@ def isAudioFile(file_suffix):
 		return True
 
 	return False
+
+def valid_time(time_str):
+	pattern = r'^\d{2}:\d{2}:\d{2}$'  # Regular expression pattern for xx:xx:xx format
+	if not re.match(pattern, time_str):
+		raise argparse.ArgumentTypeError(f"Invalid time format: {time_str}. Must be in the format xx:xx:xx")
+	return time_str
 
 def extract_audio(args):
 
@@ -52,14 +59,23 @@ def extract_audio(args):
 		print(arg, '\t', getattr(args, arg))
 
 	time.sleep(1)
-
+	
 	print("\nRunning:")
 	print("-------------------------------------------------------")
 
 	for videofile in video_files:
 		output_filename = str(Path(args.output_dir, videofile.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + args.format))
 		print("\tOutput file", '\t', output_filename)
-		ffmpeg.input(str(videofile)).output(output_filename).run()
+		
+		if args.start and args.end:
+			ffmpeg.input(str(videofile), ss=args.start, to=args.end).output(output_filename).run()
+		elif args.start:
+			ffmpeg.input(str(videofile), ss=args.start).output(output_filename).run()
+		elif args.end:
+			ffmpeg.input(str(videofile), to=args.end).output(output_filename).run()
+		else:
+			ffmpeg.input(str(videofile)).output(output_filename).run()
+
 		print("\tDone")
 
 	print("\nFinished:")
@@ -71,6 +87,8 @@ def main():
 	parser.add_argument("-f", "--filename", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
 	parser.add_argument("-o", "--output_dir", help="Ouput directory")
 	parser.add_argument("--format", help="Ouput format to produce", choices=audio_supported, default="mp3")
+	parser.add_argument("-s", "--start", help="Start time in 00:00:00 format", type=valid_time)
+	parser.add_argument("-e", "--end", help="End time in 00:00:00 format", type=valid_time)
 
 	args = parser.parse_args()
 	args.input_dir = str(Path(args.input_dir).resolve())
