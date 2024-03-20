@@ -3,33 +3,75 @@ import os
 import youtube_dl
 import argparse
 import subprocess
+import shutil
 from pathlib import Path, PurePath
 
-model_bin = "yt-dlp.exe"
-get_best_format  = "'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'"
-get_video_format = "'bestvideo[ext=mp4]/best[ext=mp4]'"
-get_audio_format = "'bestaudio[ext=m4a]/best[ext=aac]'"
+debug_flag       = True
+model_bin        = "yt-dlp.exe"
+get_best_format  = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+get_video_format = "bestvideo[ext=mp4]/best[ext=mp4]"
+get_audio_format = "bestaudio[ext=m4a]/best[ext=aac]"
+get_merge_format = 'mkv'
+
+# print unicode characters instead of ascii
+#def printuni(text):
+#
+#	stdout_bytes = text.encode('utf-8')
+#	print(f"bytes: {stdout_bytes}")
+#
+#	idxlist = []
+#	for idx, byte_value in enumerate(stdout_bytes):
+#		print(byte_value)
+#		if byte_value < 32 or byte_value > 126:
+#			# Non-printable character found
+#			idxlist.append(idx)
+#
+#	print(f'size {idxlist}')
+#
+#	#print(c, end="") for idx, c in enumerate(stdout_bytes) if idx not in idxlist else print(ord(c), end="")
+#
+#	for idx, c in enumerate(text):
+#		if idx not in idxlist:
+#			print(f'{c}', end="")
+#		else:
+#			print(ord(c), end="")
+#
+#	print("")
 
 def adjust_format(args):
 
-	if args.list:
-		opts = f" {args.url} -F"
-		return opts
+	global debug_flag
 
-	merge_format = 'mkv'
+	opts = []
+
+	if args.quiet:
+		debug_flag = False
+
+	if args.list:
+		opts += ["-F", args.url]
+		return opts
 
 	if args.audio_only:
 		args.format = get_audio_format
-		args.merge_format = False
+		args.merge = False
 	elif args.video_only:
 		args.format = get_video_format
-		args.merge_format = False
-	else:
-		args.format = get_best_format
+		args.merge = False
 
-	opts = f" {args.url} -f {args.format} -o {args.output_dir}"
-	if args.merge_format:
-		opts += f" --merge-output-format {merge_format}"
+
+	opts = [args.url, "-f", args.format]
+
+	if args.merge:
+		opts += ["--merge-output-format", args.merge_format]
+
+	if args.keep:
+		opts += ["-k"]
+
+	if args.verbose:
+		opts += ["--verbose"]
+
+	if args.overwrite:
+		opts += ["--yes-overwrites"]
 
 	return opts
 
@@ -42,40 +84,19 @@ def status(d):
 
 def get_youtube_vid(binary, opts):
 
-	print([binary, opts])
+	global debug_flag
 
-	if "-F" in opts:
-		stdout_line = "test";
-		process = subprocess.Popen([binary, opts], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	process = subprocess.Popen([model_bin] + opts, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+	if debug_flag == True:
 		print(f"Starting process {process}\n")
 
-		while stdout_line:
-			stdout_line = process.stdout.readline().decode('utf-8')
+	video_name = ""
 
-			if not stdout_line:
-				stderr_line = process.stderr.readline().decode('utf-8')
-				if stderr_line:
-					print(stderr_line.strip())
-				break
+	stdout_line = "start";
+	while stdout_line:
 
-			print(stdout_line.strip())
-
-		return
-
-
-	process = subprocess.Popen([binary, opts], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	print(f"Starting process {process}\n")
-
-	#out, err = process.communicate() #blocking process
-
-	# Read and print the output line by line
-	stdout_line = "";
-	pattern = "[download] Destination:"
-	downloaded_pattern = "already been downloaded"
-
-	while stdout_line.find(pattern) != 0:
-
-		stdout_line = process.stdout.readline().decode('utf-8')
+		stdout_line = process.stdout.readline()
 
 		if not stdout_line:
 			stderr_line = process.stderr.readline().decode('utf-8')
@@ -83,39 +104,61 @@ def get_youtube_vid(binary, opts):
 				print(stderr_line.strip())
 			break
 
-		print(stdout_line.strip())
-		if downloaded_pattern in stdout_line:
-			return
+		# if just listing the formats, then stop here
+		if "-F" in opts:
+			print(stdout_line.decode('utf-8').strip())
+			continue;
+		#out, err = process.communicate() #blocking process
 
-	video_name = ""
-	if stdout_line.find(pattern) == 0:
-		video_name = stdout_line[len(pattern) + 1:].strip()
+		# Read and print the output line by line
+		merger_pattern     = "[Merger] Merging formats into \""
+		download_pattern   = "[download] Destination: "
+		downloaded_pattern = " has already been downloaded"
 
-	out, err = process.communicate() #blocking process
+		# Convert stdout_line to bytes
+		stdout_line = stdout_line.decode('utf-8').strip()
 
-	if not out:
-		print(err.decode('utf-8'))
-	else:
-		for line in out.decode('utf-8').split('\n'):
-			print(line)
+		if stdout_line.startswith(merger_pattern):
+			video_name = stdout_line[len(merger_pattern):-1]
+			print(stdout_line)
+			continue
+
+		elif not video_name and stdout_line.startswith(download_pattern):
+			video_name = stdout_line[len(download_pattern):]
+			print(stdout_line)
+			continue
+
+		elif downloaded_pattern in stdout_line:
+			video_name = stdout_line[len("[download] "):stdout_line.index(downloaded_pattern)]
+			print(stdout_line)
+			break
+
+		print(stdout_line)
 
 	# Wait for the process to finish
 	return_code = process.wait()
-	print("-------------------------------------------------------")
-	print(f"Video file: '{video_name}' returned code", return_code)
+
+	#if args.output_dir != os.getcwd():
+	#	shutil.move(os.getcwd(), args.output_dir)
+
+	return video_name, return_code
 
 def main():
-
 
 	parser = argparse.ArgumentParser("Downloads the best quality video from source", add_help=True)
 	parser.add_argument("-u", "--url", help="URL or source of one or more videos", required=True)
 	parser.add_argument("-F", "--list", help="List all formats that can be downloaded", action='store_true')
+	parser.add_argument("--verbose", help="Verbose output", action='store_true')
+	parser.add_argument('-k', "--keep", help="Keep intermediate files", action='store_true')
 	parser.add_argument("-f", "--format", help="Format of the video to download", default=get_best_format)
 	parser.add_argument("-o", "--output_dir", help="Ouput directory", default=os.getcwd())
-	parser.add_argument("-a", "--audio_only", help="Audio only download")
-	parser.add_argument("-v", "--video_only", help="Video only download")
+	parser.add_argument("-a", "--audio_only", help="Audio only download", action='store_true')
+	parser.add_argument("-v", "--video_only", help="Video only download", action='store_true')
 	parser.add_argument("-b", "--bin", help="Path to the binary to choose", default=model_bin)
-	parser.add_argument("-m", "--merge_format", help="Bool on whether to merge the audio and video to mkv", type=bool, default=True)
+	parser.add_argument("-m", "--merge", help="Bool on whether to merge the audio and video", type=bool, default=False)
+	parser.add_argument("--merge_format", help="Fomat of merging the audio and video. Default format: mkv", default=get_merge_format)
+	parser.add_argument("--quiet", help="Debug print off", action='store_true')
+	parser.add_argument("--overwrite", help="Overwrite an exising file", action='store_true')
 
 	args = parser.parse_args()
 	opts = adjust_format(args)
@@ -129,14 +172,16 @@ def main():
 	arguments = vars(args);
 	for key in arguments:
 		value = getattr(args, key)
-		if (key and type(value) != bool and value != None) or value == True:
+		if (key and type(value) != bool and value != None) or type(value) == bool:
 			print(key, '\t', value)
 
 	print("\nRunning:")
 	print("-------------------------------------------------------")
 
 	#print(f"Starting with opts {opts.split(' ')}\n")
-	get_youtube_vid(args.bin, opts)
+	video_name, retcode = get_youtube_vid(args.bin, opts)
+	print("-------------------------------------------------------")
+	print(f"Video file: '{video_name}' returned code", retcode)
 
 
 ''
