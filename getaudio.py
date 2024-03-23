@@ -58,6 +58,16 @@ def extract_audio(args):
 	for arg in arguments:
 		print(arg, '\t', getattr(args, arg))
 
+	# join all arguments for the program
+	if args.start and args.end:
+		options = " ".join(["-ss", args.start, "-to", args.end])
+	elif args.start:
+		options = " ".join(["-ss", args.start]);
+	elif args.end:
+		options = " ".join(["-to", args.end]);
+	else:
+		options = ""
+
 	time.sleep(1)
 	
 	print("\nRunning:")
