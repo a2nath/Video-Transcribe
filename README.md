@@ -62,11 +62,11 @@ path whisper-gpu.py -f https://soundcloud.com/prznt/prznt-x-2scratch-stay
 
 In case you want to test a script standalone before using the whisper package. Here's the command
 ```
-python download_best.py -u https://soundcloud.com/prznt/prznt-x-2scratch-stay
+python download_best.py -l https://soundcloud.com/prznt/prznt-x-2scratch-stay
 ```
 Checkout the various formats and quality of the files avaiallable before downloading. Note that this may not have an impact on the performance of transcription.
 ```
-python download_best.py -u https://soundcloud.com/prznt/prznt-x-2scratch-stay -F
+python download_best.py -l https://soundcloud.com/prznt/prznt-x-2scratch-stay -F
 
 Settings as follows:
 -------------------------------------------------------
@@ -124,7 +124,7 @@ Media file: 'Prznt x 2Scratch - Stay [715263370].mp3' returned code 0
 ### Faster-whisper
 More information can be found at https://github.com/SYSTRAN/faster-whisper?tab=readme-ov-file#installation
 <br />
-<br />`pip install whisper-faster`
+<br />`pip install whisper-faster validators ffmpeg argparse`
 
 ### Open-AI's whisper
 More information can be found at https://github.com/openai/whisper?tab=readme-ov-file#setup
