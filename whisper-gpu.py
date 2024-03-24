@@ -6,6 +6,7 @@ import ffmpeg
 import timeit
 import time
 from faster_whisper import WhisperModel as whisper
+from faster_whisper.utils import available_models
 from pathlib import Path
 from typing import Iterator, TextIO
 from download_best import Download
@@ -15,11 +16,12 @@ import validators
 # by default large model is used and float32 precision
 #
 #
-sizes_supported = ["tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3", "large"]
-
 video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
 audio_supported = [".mp3", ".wave", ".aac", ".flac"]
 scrap_filename = "output.aac"
+
+def sizes_supported() -> list[str]:
+	return available_models()
 
 def srt_format_timestamp(seconds: float):
 	assert seconds >= 0, "non-negative timestamp expected"
@@ -93,11 +95,14 @@ def initialize(args):
 	if isfile(scrap_filename):
 		os.remove(scrap_filename)
 
-	os.environ["OMP_NUM_THREADS"] = str(args.nproc)
-
-
 	# initialize the model with given args
-	model = whisper(args.model_size, device=args.device, compute_type=args.precision)
+	if args.device != "cuda":
+		#overrides the os.environ["OMP_NUM_THREADS"]
+		threads = str(args.nproc)
+		model = whisper(args.model_size, cpu_threads=threads, num_workers=4, device=args.device, compute_type=args.precision)
+	else:
+		model = whisper(args.model_size, device=args.device, compute_type=args.precision)
+
 	return model;
 
 def close(args):
@@ -108,8 +113,7 @@ def close(args):
 	if Path(args.filename).exists():
 		args.filename.close()
 
-def check_input(args, video_files, audio_files, debug = False, verbose = False):
-
+def add_media_files(args, video_files, audio_files, debug = False, verbose = False):
 
 	if args.filename:
 		if validators.url(args.filename):
@@ -170,6 +174,7 @@ def main():
 	video_files = []
 	audio_files = []
 
+
 	parser = argparse.ArgumentParser("Generates subtitiles of the video file as an input")
 	parser.add_argument("--input_dir", "-i", help="Input directory where video files are")
 	parser.add_argument("--filename", "-f", help="Name of the media file stored in the filesystem or URL of a video/audio file that needs to subtitles")
@@ -178,7 +183,7 @@ def main():
 	parser.add_argument("--beam_size", "-b", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
 	parser.add_argument("--precision", "-p", help="Precision to use to create the model", type=str, default="auto")
 	parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", choices=["cpu", "cuda"], default="cuda")
-	parser.add_argument("--model_size", "-s", help="Size of the model, default is large.", choices=sizes_supported, default="small")
+	parser.add_argument("--model_size", "-s", help="Size of the model, default is small.", choices=sizes_supported(), default="small")
 	parser.add_argument("--nproc", "-n", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
 	parser.add_argument("--verbose", help="Verbose print from dependent processes", action='store_true')
 	parser.add_argument("--quiet", help="Debug print off", action='store_true')
@@ -200,7 +205,7 @@ def main():
 
 	model = initialize(args);
 
-	check_input(args, video_files, audio_files, debug = not args.quiet, verbose = args.verbose)
+	add_media_files(args, video_files, audio_files, debug = not args.quiet, verbose = args.verbose)
 
 	# convert the videofile into audiofile before processing
 	for videoFile in video_files:
