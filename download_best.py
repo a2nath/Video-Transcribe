@@ -59,7 +59,7 @@ class Download:
 			self.opts += ["-k"]
 
 		if args.output:
-			self.opts += ["-o", Path(args.output_dir, args.output)]
+			self.opts += ["-o", str(Path(args.output_dir, args.output))]
 
 		if args.verbose:
 			self.opts += ["--verbose"]
@@ -155,7 +155,7 @@ class Download:
 			print("\nDownloaderg:")
 			print("-------------------------------------------------------")
 			print(f"Parameters {self.opts}\n")
-		video_name, retcode = self.get_youtube_vid(self.model_bin, self.opts)
+		video_name, retcode = self.get_youtube_vid()
 
 		return video_name, retcode;
 
@@ -188,7 +188,7 @@ def main():
 	parser.add_argument("-f", "--format", help="Format of the video to download", default=global_get_best_format)
 	parser.add_argument("-u", "--username", help="Username to login with")
 	parser.add_argument("-p", "--password", help="Password for the credentials. Used with username")
-	parser.add_argument("-o", "--output", help="Ouput format", action='store_true')
+	parser.add_argument("-o", "--output", help="Ouput format")
 	parser.add_argument("-d", "--output_dir", help="Ouput directory", default=os.getcwd())
 	parser.add_argument("-a", "--audio_only", help="Audio only download", action='store_true')
 	parser.add_argument("-v", "--video_only", help="Video only download", action='store_true')
