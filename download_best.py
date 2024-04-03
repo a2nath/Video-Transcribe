@@ -59,7 +59,9 @@ class Download:
 			self.opts += ["-k"]
 
 		if args.output_name:
-			self.opts += ["-o", str(Path(args.output_dir, args.output_name))]
+			# make the directory if missing
+			Path(args.output_dir).resolve().mkdir(parents=True, exist_ok=True)
+			self.filepath = str(Path(args.output_dir, args.output_name))
 
 		if args.verbose:
 			self.opts += ["--verbose"]
@@ -84,10 +86,15 @@ class Download:
 			if args.bin:
 				self.model_bin = str(Path(args.bin).resolve())
 		except FileNotFoundError as e:
-		 	print(e)
+			print(e)
 
 
-	def get_youtube_vid(self):
+	def get_youtube_vid(self, filepath = None):
+
+		if filepath and Path(filepath).exists():
+			self.opts += ["-o", filepath]
+		elif self.filepath:
+			self.opts += ["-o", self.filepath]
 
 		process = subprocess.Popen([self.model_bin] + self.opts, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
 
@@ -160,13 +167,15 @@ class Download:
 
 		return video_name, return_code
 
-	def run(self):
+	def run(self, filepath = None):
 
 		if self.debug_flag:
-			print("\nDownloaderg:")
+			print("\nDownloading:")
 			print("-------------------------------------------------------")
 			print(f"Parameters {self.opts}\n")
-		video_name, retcode = self.get_youtube_vid()
+
+		# download the media file from the internet
+		video_name, retcode = self.get_youtube_vid(filepath)
 
 		return video_name, retcode;
 
@@ -187,6 +196,7 @@ class Download:
 			self.get_video_format = default_get_video_format
 			self.get_merge_format = default_get_merge_format
 			self.opts             = []
+			self.filepath         = ''
 			self.timeout          = 900
 		else:
 			raise FileNotFoundError(f"Executable file has a problem or does not exist {default_model_bin}")
