@@ -6,6 +6,8 @@ import argparse
 import subprocess
 import shutil
 from pathlib import Path, PurePath
+import timeit
+import pdb
 
 default_model_bin        = "yt-dlp.exe"
 default_get_best_format  = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
@@ -40,7 +42,26 @@ class Download:
 	#
 	#	print("")
 
+	# Input: str:output_dir, str:output_file
+	# Return: Path:output_dir/output_file
+	# Info: if output_file has a path, it overrides output_dir
+	def get_fullpath(self, output_dir, output_file):
+		output_filepath = Path(output_file).resolve()
+
+		if output_filepath.parent != Path(output_dir).resolve():
+			output_filepath.parent.mkdir(parents=True, exist_ok=True)
+			output_dir = output_filepath.parent
+			output_file = Path(output_file).name
+
+		return Path(output_dir, output_file)
+
 	def adjust_format(self, args):
+
+		try:
+			if args.bin:
+				self.model_bin = str(Path(args.bin).resolve())
+		except FileNotFoundError as e:
+			print(e)
 
 		if args.list:
 			self.opts += ["-F", args.url]
@@ -58,10 +79,11 @@ class Download:
 		if args.keep:
 			self.opts += ["-k"]
 
+		if args.output_dir:
+			self.output_dir = args.output_dir
+
 		if args.output_name:
-			# make the directory if missing
-			Path(args.output_dir).resolve().mkdir(parents=True, exist_ok=True)
-			self.filepath = str(Path(args.output_dir, args.output_name))
+			self.filepath = self.get_fullpath(self.output_dir, args.output_name)
 
 		if args.verbose:
 			self.opts += ["--verbose"]
@@ -79,34 +101,35 @@ class Download:
 			if args.password:
 				self.opts += ["-p", args.password]
 
-		if args.timeout:
+		if args.playlist_start:
+			self.opts += ["--playlist-start", args.playlist_start]
+
+		if args.playlist_end:
+			self.opts += ["--playlist-end", args.playlist_end]
+
+		if args.timeout is not None:
 			self.timeout = args.timeout
 
-		try:
-			if args.bin:
-				self.model_bin = str(Path(args.bin).resolve())
-		except FileNotFoundError as e:
-			print(e)
-
-
+	# Input: filename to use for output if using externally
+	# Return: [list of filenames] that were processed, and [retcode]
 	def get_youtube_vid(self, filepath = None):
+		if filepath:
+			self.filepath = self.get_fullpath(self.output_dir, filepath)
 
-		if filepath and Path(filepath).exists():
-			self.opts += ["-o", filepath]
-		elif self.filepath:
-			self.opts += ["-o", self.filepath]
+		if self.filepath:
+			self.opts += ["-o", str(self.filepath)]
 
 		process = subprocess.Popen([self.model_bin] + self.opts, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
 
 		if self.debug_flag == True:
-			print(f"Starting process {process}\n")
+			print(f"Starting with parameters: {self.opts}\n")
 
-		video_name = ""
+		media_list = []
+		output_file = ''
+		start_time = timeit.default_timer()
 
 		while True:
-
 			stdout_line_bytes = process.stdout.readline()
-
 			if not stdout_line_bytes and process.poll() is not None:
 				break
 
@@ -125,6 +148,11 @@ class Download:
 				print(f"Error decoding line from stdout: {e}")
 				print(f"Problematic byte sequence: {stdout_line_bytes}")
 				continue
+			except KeyboardInterrupt:
+				process.kill()
+				outs, errs = process.communicate(timeout = 60)
+				print("----------------------KILLED---------------------------")
+				print(f"Process interrupted with media list {media_list}\nouts = {outs.decode('utf-8').rstrip()}\nerrs = {errs.decode('utf-8').rstrip()}")
 
 			# if just listing the formats, then stop here
 			if "-F" in self.opts:
@@ -137,35 +165,53 @@ class Download:
 			download_pattern   = "[download] Destination: "
 			downloaded_pattern = " has already been downloaded"
 
-			if stdout_line.startswith(merger_pattern):
-				video_name = stdout_line[len(merger_pattern):-1]
-				print(stdout_line, flush=True)
-				continue
+			if stdout_line:
+				if stdout_line.startswith(merger_pattern):
+					output_file = stdout_line[len(merger_pattern):-1]
 
-			elif not video_name and stdout_line.startswith(download_pattern):
-				video_name = stdout_line[len(download_pattern):]
-				print(stdout_line, flush=True)
-				continue
+				elif output_file == '' and stdout_line.startswith(download_pattern):
+					output_file = stdout_line[len(download_pattern):]
 
-			elif downloaded_pattern in stdout_line:
-				video_name = stdout_line[len("[download] "):stdout_line.index(downloaded_pattern)]
-				print(stdout_line, flush=True)
-				break
+				elif output_file == '' and downloaded_pattern in stdout_line:
+					output_file = stdout_line[len("[download] "):stdout_line.index(downloaded_pattern)]
 
-			elif stdout_line:
+				if output_file and 'Extracting URL:' in stdout_line:
+					media_list.append(output_file)
+					output_file = ''
+
 				print(stdout_line, flush=True)
+
+			if self.timeout is not None and float(timeit.default_timer() - start_time) > float(self.timeout):
+				process.kill()
+				outs, errs = process.communicate(timeout = 60)
+				print("----------------------KILLED---------------------------")
+				print(f"Process timed out after {self.timeout} seconds\nouts = {outs.decode('utf-8').rstrip()}\nerrs = {errs.decode('utf-8').rstrip()}")
+
+
+		if output_file and output_file not in media_list:
+			media_list.append(output_file)
 
 		# Wait for the process to finish
-		return_code = process.wait(timeout=self.timeout) # default 15 min
+		if self.timeout is not None:
+			outs, errs  = process.communicate(timeout = self.timeout)
+		else:
+			outs, errs  = process.communicate()
+		return_code = process.returncode
 
-		#if args.output_dir != os.getcwd():
-		#	shutil.move(os.getcwd(), args.output_dir)
+		try:
+			if media_list and self.output_dir != Path(media_list[0]).resolve().parent:
+				for output_file in media_list:
+					shutil.move(output_file, str(Path(self.output_dir, Path(output_file).resolve().name)))
+			else:
+				raise Exception(f"Nothing to process\nouts = {outs.decode('utf-8').rstrip()}\nerrs = {errs.decode('utf-8').rstrip()}")
+		except Exception as e:
+			print(e)
 
 		if self.debug_flag == True:
-			print("-------------------------------------------------------")
-			print(f"Media file '{video_name}' returned code {return_code}")
+			print("-----------------------FINISHED------------------------")
+			print(f"Media file(s) '{media_list}' returned code {return_code}")
 
-		return video_name, return_code
+		return media_list, return_code
 
 	def run(self, filepath = None):
 
@@ -196,8 +242,9 @@ class Download:
 			self.get_video_format = default_get_video_format
 			self.get_merge_format = default_get_merge_format
 			self.opts             = []
+			self.output_dir       = os.getcwd()
 			self.filepath         = ''
-			self.timeout          = 900
+			self.timeout          = None
 		else:
 			raise FileNotFoundError(f"Executable file has a problem or does not exist {default_model_bin}")
 
@@ -222,7 +269,9 @@ def main():
 	parser.add_argument("-m", "--merge", help="Whether to merge the audio and video. Default format: mkv", nargs='*')
 	parser.add_argument("--quiet", help="Debug print off", action='store_true')
 	parser.add_argument("--overwrite", help="Overwrite an exising file", action='store_true')
-	parser.add_argument("--timeout", help="Amount of time to wait for the download to finish. Default 15 min")
+	parser.add_argument("--timeout", help="Amount of time to wait for the download to finish (seconds)")
+	parser.add_argument("--playlist_start", help="Starting position from a list of media, to start downloading from")
+	parser.add_argument("--playlist_end", help="Ending position from a list of media, to stop downloading at")
 
 	args = parser.parse_args()
 	downloader = Download(args, debug=not args.quiet)
