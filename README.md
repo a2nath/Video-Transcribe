@@ -6,7 +6,7 @@ Using OpenAI's whisper or whisper-faster and ffmpeg take a list of video and aud
 * Python 3.9.13 64-bit
 * ffmpeg v4.4-full_build
 * Open-AI's whisper 20231117 release (CPU-based computation)
-* Whister-faster 0.10.0 with support for large-v3 model (GPU-based computation)
+* Whister-faster 1.0.1 with support for large-v3 model (GPU-based computation)
 * CUDA 11.8
 * cuDNN v8.9.6 11.x release
 * nVidia GTX 1080 
