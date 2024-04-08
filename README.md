@@ -1,5 +1,5 @@
 # Video Transcribe Tool using Open-AI's Whisper
-Using OpenAI's whisper or whisper-faster and ffmpeg take a list of video and audio files and provide subtitles
+Using OpenAI's whisper or whisper-faster and ffmpeg take a list of video and audio files and provide subtitles. 
 
 ## Tested on
 * Windows 10 64-bit, 19045.3693
@@ -51,7 +51,19 @@ If you want to transcribe videos and audio from the internet, depending on wheth
 ```
 path whisper-gpu.py -f https://www.youtube.com/watch?v=jAa58N4Jlos
 ```
-and it doesn't have to be from youtube. Youtube Downloader gets better over time and has its own reporsitory. Here it uses a soundcloud link to download a song
+Even youtube videos from a particular channel can be downloaded and the entire set of files transcribed by the script:
+```
+path whisper-gpu.py -f https://www.youtube.com/@MrBeast/videos
+```
+I usually place a maximum number of videos to transcribe for testing and to save time: 
+```
+path whisper-gpu.py -f https://www.youtube.com/@MrBeast/videos --playlist_end 10
+```
+Above, only 10 videos will be downloaded in audio format and transcribed. 
+
+But wait! There's MORE
+
+And it doesn't have to be from youtube. Youtube Downloader gets better over time and has its own reporsitory. Here it uses a soundcloud link to download a song
 ```
 path whisper-gpu.py -f https://soundcloud.com/prznt/prznt-x-2scratch-stay
 ```
