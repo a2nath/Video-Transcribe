@@ -45,6 +45,9 @@ class Download:
 	# Input: str:output_dir, str:output_file
 	# Return: Path:output_dir/output_file
 	# Info: if output_file has a path, it overrides output_dir
+	def findarg(self, args, key: str) -> bool:
+		return key in args and getattr(args, key)
+
 	def get_fullpath(self, output_dir, output_file):
 		output_filepath = Path(output_file).resolve()
 
@@ -58,56 +61,56 @@ class Download:
 	def adjust_format(self, args):
 
 		try:
-			if args.bin:
+			if self.findarg(args, 'bin'):
 				self.model_bin = str(Path(args.bin).resolve())
 		except FileNotFoundError as e:
 			print(e)
 
-		if args.list:
+		if self.findarg(args, 'list'):
 			self.opts += ["-F", args.url]
 			return
 
-		if args.audio_only:
+		if self.findarg(args, 'audio_only'):
 			args.format = self.get_audio_format
 			args.merge = False
-		elif args.video_only:
+		elif self.findarg(args, 'video_only'):
 			args.format = self.get_video_format
 			args.merge = False
 
 		self.opts = [args.url, "-f", args.format]
 
-		if args.keep:
+		if self.findarg(args, 'keep'):
 			self.opts += ["-k"]
 
-		if args.output_dir:
-			self.output_dir = args.output_dir
+		if self.findarg(args, 'output_dir'):
+			self.output_dir = Path(args.output_dir).resolve()
 
-		if args.output_name:
+		if self.findarg(args, 'output_name'):
 			self.filepath = self.get_fullpath(self.output_dir, args.output_name)
 
-		if args.verbose:
+		if self.findarg(args, 'verbose'):
 			self.opts += ["--verbose"]
 
-		if args.merge is not None and args.merge:
+		if 'merge' in args and args.merge:
 			self.opts += ["--merge-output-format", args.merge[0]]
-		elif args.merge is not None:
+		elif 'merge' in args:
 			self.opts += ["--merge-output-format", self.get_merge_format]
 
-		if args.overwrite:
+		if self.findarg(args, 'overwrite'):
 			self.opts += ["--yes-overwrites"]
 
-		if args.username:
+		if self.findarg(args, 'username'):
 			self.opts += ["-u", args.username]
-			if args.password:
+			if self.findarg(args, 'password'):
 				self.opts += ["-p", args.password]
 
-		if args.playlist_start:
+		if self.findarg(args, 'playlist_start'):
 			self.opts += ["--playlist-start", args.playlist_start]
 
-		if args.playlist_end:
+		if self.findarg(args, 'playlist_end'):
 			self.opts += ["--playlist-end", args.playlist_end]
 
-		if args.timeout is not None:
+		if self.findarg(args, 'timeout'):
 			self.timeout = args.timeout
 
 	# Input: filename to use for output if using externally
@@ -199,31 +202,42 @@ class Download:
 		return_code = process.returncode
 
 		try:
-			if media_list and self.output_dir != Path(media_list[0]).resolve().parent:
-				for output_file in media_list:
-					shutil.move(output_file, str(Path(self.output_dir, Path(output_file).resolve().name)))
-			else:
+			if media_list and self.output_dir != Path(media_list[0]).parent.resolve():
+				for index in range(len(media_list)):
+
+					output_file = media_list[index]
+					dst = shutil.move(output_file, str(Path(self.output_dir, Path(output_file).resolve().name)))
+
+					# change the item in the list
+					media_list[index] = dst
+
+			elif not media_list:
 				raise Exception(f"Nothing to process\nouts = {outs.decode('utf-8').rstrip()}\nerrs = {errs.decode('utf-8').rstrip()}")
+
+		except (shutil.Error, OSError) as e:
+			print("Error moving file:", e)
+
 		except Exception as e:
 			print(e)
 
 		if self.debug_flag == True:
+			for file in media_list:
+				print(f"Downloaded file {file}")
+			print(f"Returned code {return_code}")
 			print("-----------------------FINISHED------------------------")
-			print(f"Media file(s) '{media_list}' returned code {return_code}")
 
 		return media_list, return_code
 
 	def run(self, filepath = None):
 
 		if self.debug_flag:
-			print("\nDownloading:")
-			print("-------------------------------------------------------")
+			print("---------------------DOWNLOADING-----------------------")
 			print(f"Parameters {self.opts}\n")
 
 		# download the media file from the internet
-		video_name, retcode = self.get_youtube_vid(filepath)
+		video_names, retcode = self.get_youtube_vid(filepath)
 
-		return video_name, retcode;
+		return video_names, retcode;
 
 	def __init__(self, args, debug = False):
 
@@ -277,12 +291,11 @@ def main():
 	downloader = Download(args, debug=not args.quiet)
 
 	# make the directory if missing
-	Path(args.output_dir).resolve().mkdir(parents=True, exist_ok=True)
+	Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
 	if not args.quiet:
 
-		print("\nSettings as follows:")
-		print("-------------------------------------------------------")
+		print("-----------------------SETTINGS------------------------")
 
 		arguments = vars(args);
 		for key in arguments:
@@ -290,8 +303,7 @@ def main():
 			if (key and type(value) != bool and value != None) or type(value) == bool:
 				print(key, '\t', value)
 
-		print("\nDownloader:")
-		print("-------------------------------------------------------")
+		print("---------------------DOWNLOADING-----------------------")
 
 	downloader.get_youtube_vid()
 
