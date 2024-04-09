@@ -15,10 +15,6 @@ from download_best import Download
 from get_audio import AudioProcess
 import pdb
 
-# Note:
-# by default large model is used and float32 precision
-#
-#
 video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
 audio_supported = [".mp3", ".wave", ".aac", ".flac"]
 temp_audio_filepath = "temp_audio.aac"
@@ -196,7 +192,7 @@ def main():
 	parser.add_argument("-i", "--input_dir", help="Input directory where video files are. --filename overrides this")
 	parser.add_argument("-af", "--audio_filter", help="Audio or video filters to use before transcription \
 						(for ffmpeg), no spaces, just comma-separated")
-	parser.add_argument("-o", "--output_name", help="Output filename in case of issues with title", default=os.getcwd())
+	parser.add_argument("-o", "--output_name", help="Output filename in case of issues with title")
 	parser.add_argument("-od", "--output_dir", help="Ouput directory", default=os.getcwd())
 	parser.add_argument("-l", "--language", help="Language to be translated from", default='en', type=str)
 	parser.add_argument("-b", "--beam_size", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
@@ -224,9 +220,6 @@ def main():
 		for arg in arguments:
 			print(arg, '\t', getattr(args, arg))
 
-	#if args.output_name:
-	#	temp_audio_filename = Path(args.output_dir, args.output_name)
-	#else:
 	temp_audio_filepath = str(Path(args.output_dir, temp_audio_filepath))
 
 	add_media_files(args, video_files, audio_files, debug = not args.quiet, verbose = args.verbose)
