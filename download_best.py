@@ -48,15 +48,14 @@ class Download:
 	def findarg(self, args, key: str) -> bool:
 		return key in args and getattr(args, key)
 
-	def get_fullpath(self, output_dir, output_file):
+	def get_fullpath(self, output_dir, output_file) -> tuple[Path, str]:
 		output_filepath = Path(output_file).resolve()
 
 		if output_filepath.parent != Path(output_dir).resolve():
-			output_filepath.parent.mkdir(parents=True, exist_ok=True)
 			output_dir = output_filepath.parent
 			output_file = Path(output_file).name
 
-		return Path(output_dir, output_file)
+		return Path(output_dir, output_file), output_dir
 
 	def adjust_format(self, args):
 
@@ -82,11 +81,12 @@ class Download:
 		if self.findarg(args, 'keep'):
 			self.opts += ["-k"]
 
-		if self.findarg(args, 'output_dir'):
-			self.output_dir = Path(args.output_dir).resolve()
-
 		if self.findarg(args, 'output_name'):
-			self.filepath = self.get_fullpath(self.output_dir, args.output_name)
+			self.filepath, self.output_dir = self.get_fullpath(self.output_dir, args.output_name)
+			Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+		elif self.findarg(args, 'output_dir'):
+			self.output_dir = Path(args.output_dir).resolve()
+			Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
 		if self.findarg(args, 'verbose'):
 			self.opts += ["--verbose"]
@@ -117,7 +117,8 @@ class Download:
 	# Return: [list of filenames] that were processed, and [retcode]
 	def get_youtube_vid(self, filepath = None):
 		if filepath:
-			self.filepath = self.get_fullpath(self.output_dir, filepath)
+			self.filepath, self.output_dir = self.get_fullpath(self.output_dir, filepath)
+			Path(self.output_dir).mkdir(parents=True, exist_ok=True)
 
 		if self.filepath:
 			self.opts += ["-o", str(self.filepath)]
@@ -289,9 +290,6 @@ def main():
 
 	args = parser.parse_args()
 	downloader = Download(args, debug=not args.quiet)
-
-	# make the directory if missing
-	Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
 	if not args.quiet:
 
