@@ -71,12 +71,10 @@ class AudioProcess:
 	def extract_audio(self, input_filepath, output_filepath = None, overwrite = None):
 
 		media_file = Path(input_filepath).resolve()
-		output_filename = media_file.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + self.opts.extension
 
 		if output_filepath is not None and output_filepath:
 			self.opts.output_name, self.opts.output_dir = self.get_fullpath(os.getcwd(), output_filepath)
 
-		pdb.set_trace()
 		# start evaluating here
 		if self.findarg(self.opts, 'output_name') and self.findarg(self.opts, 'output_dir'):
 			output_filename = Path(self.opts.output_dir, Path(self.opts.output_name).name)
@@ -85,6 +83,9 @@ class AudioProcess:
 		elif self.findarg(self.opts, 'output_dir'):
 			output_filename = Path(self.opts.output_dir, Path(media_file.name).stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + self.opts.extension)
 			self.set_output_dir(self.opts.output_dir)
+
+		else:
+			output_filename = media_file.stem + "." + time.strftime("%Y%m%d-%H%M%S") + "." + self.opts.extension
 
 		media_file = str(media_file)
 		output_filename = str(output_filename)
@@ -149,6 +150,9 @@ class AudioProcess:
 		self.output_options = {}
 		self.global_options = {}
 
+		if not self.findarg(self.opts, "extension"):
+			self.opts.extension = "mp3" # defaults for file extension/codec to use
+
 		if not self.findarg(self.opts, 'quiet'):
 			print("----------------------GET-AUDIO INIT-------------------")
 
@@ -198,8 +202,8 @@ def main():
 	parser.add_argument("-i", "--filename", help="Name of the media file that needs to subtitles")
 	parser.add_argument("--input_dir", help="Input directory where video files are")
 	parser.add_argument("-af", "--audio_filter", help="Audio or video filters to use, no spaces, just comma-separated")
-	parser.add_argument("-d", "--output_dir", help="Ouput directory")
 	parser.add_argument("-o", "--output_name", help="Output filename to give to the new file. Default is the [input-filename.requested-extension]")
+	parser.add_argument("-od", "--output_dir", help="Ouput directory")
 	parser.add_argument("-x", "--extension", help="Codec to use to produce the disired extension", default="mp3")
 	parser.add_argument("-m", "--model", help="Path to the RNN model to use for noise supression")
 	parser.add_argument("-s", "--start", help="Start time in 00:00:00 format", type=AudioProcess.valid_time)
