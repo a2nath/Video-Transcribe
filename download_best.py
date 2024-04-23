@@ -126,7 +126,7 @@ class Download:
 		process = subprocess.Popen([self.model_bin] + self.opts, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
 
 		if self.debug_flag == True:
-			print(f"Starting with parameters: {self.opts}\n")
+			print(f"Parameters: {self.opts}\n")
 
 		media_list = []
 		output_file = ''
@@ -233,7 +233,6 @@ class Download:
 
 		if self.debug_flag:
 			print("---------------------DOWNLOADING-----------------------")
-			print(f"Parameters {self.opts}\n")
 
 		# download the media file from the internet
 		video_names, retcode = self.get_youtube_vid(filepath)
