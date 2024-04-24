@@ -128,7 +128,6 @@ def close(args):
 		args.filename.close()
 
 def add_media_files(args, video_files, audio_files, debug = False, verbose = False):
-	#pdb.set_trace()
 
 	if findarg(args, 'filename'):
 		if validators.url(args.filename):
@@ -148,12 +147,11 @@ def add_media_files(args, video_files, audio_files, debug = False, verbose = Fal
 				exit(-1)
 
 		elif Path(args.filename).exists():
-			args.filename = get_fullpath(os.getcwd(), args.filename)
-			if args.filename.exists():
-				if isVideoFile(args.filename.suffix) == True:
-					video_files.append(str(args.filename))
-				elif isAudioFile(args.filename.suffix) == True:
-					audio_files.append(str(args.filename))
+			args.filename, _ = get_fullpath(os.getcwd(), args.filename)
+			if isVideoFile(args.filename.suffix) == True:
+				video_files.append(str(args.filename))
+			elif isAudioFile(args.filename.suffix) == True:
+				audio_files.append(str(args.filename))
 
 	elif findarg(args, 'input_dir'):
 		if Path(args.input_dir).exists():
@@ -205,6 +203,8 @@ def main():
 	parser.add_argument("--quiet", help="Debug print off", action='store_true')
 	parser.add_argument("--playlist_start", help="Starting position from a list of media, to start downloading from")
 	parser.add_argument("--playlist_end", help="Ending position from a list of media, to stop downloading at")
+	parser.add_argument("--codec", help="Audio codec to use")
+	parser.add_argument("--bitrate", help="Audio bitrate to use")
 
 	args = parser.parse_args()
 
@@ -230,7 +230,7 @@ def main():
 		if args.quiet == False:
 			print(f"Processing file {videofile} and using audio filter")
 
-		audio_processor = AudioProcess(args, debug=not args.quiet)
+		audio_processor = AudioProcess(args)
 		audio_processor.extract_audio(input_filepath=videofile, output_filepath=temp_audio_filepath, overwrite=True);
 
 		# output_name is set by setting output_filepath
@@ -241,11 +241,14 @@ def main():
 		if args.quiet == False:
 			print(f"Processing file: {audiofile}")
 
-		if args.audio_filter:
+		if args.audio_filter or args.codec or args.bitrate:
 			if args.quiet == False:
-				print(f"Using audio filter on: {audiofile} as: {args.audio_filter}")
+				print(f"File {audiofile}")
+				print(f"Filter {args.audio_filter}")
+				print(f"Codec {args.codec}")
+				print(f"Bitrate {args.bitrate}")
 
-			audio_processor = AudioProcess(args, debug=not args.quiet)
+			audio_processor = AudioProcess(args)
 			audio_processor.extract_audio(input_filepath=audiofile, output_filepath=temp_audio_filepath, overwrite=True);
 
 			# output_name is set by setting output_filepath
