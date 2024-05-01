@@ -15,9 +15,7 @@ from download_best import Download
 from get_audio import AudioProcess
 import pdb
 
-video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
-audio_supported = [".mp3", ".wave", ".aac", ".flac"]
-temp_audio_filepath = "temp_audio.aac"
+temp_audio_filepath = "temp_audio.mp3"
 
 def sizes_supported() -> list[str]:
 	return available_models()
@@ -53,20 +51,6 @@ def write_srt(segments, file: TextIO):
 			flush=True,
 		)
 
-def isVideoFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in video_supported:
-		return True
-
-	return False
-
-def isAudioFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in audio_supported:
-		return True
-
-	return False
-
 def findarg(args, key: str) -> bool:
 	return key in args and getattr(args, key)
 
@@ -85,7 +69,6 @@ def transcribe(args, model, full_filepath, filename = None):
 
 	if filename is None: # same as path implicitly
 		filename = full_filepath
-	#pdb.set_trace()
 
 	start_time = timeit.default_timer()
 	segments, stats = model.transcribe(full_filepath, beam_size=args.beam_size, language=args.language)
@@ -127,7 +110,7 @@ def close(args):
 	if findarg(args, 'filename') and isfile(args.filename):
 		args.filename.close()
 
-def add_media_files(args, video_files, audio_files, debug = False, verbose = False):
+def add_media_files(args, media_files, debug = False, verbose = False):
 
 	if findarg(args, 'filename'):
 		if validators.url(args.filename):
@@ -135,37 +118,33 @@ def add_media_files(args, video_files, audio_files, debug = False, verbose = Fal
 			args.audio_only  = True
 			args.overwrite   = True
 			args.verbose     = False
+			args.format      = 'mp3'
 
 			download = Download(args, debug)
 			audio_file_list, retcode = download.run()
 
 			if retcode == 0:# and audio_file_list == args.output_name:
-				audio_files += audio_file_list
+				media_files += audio_file_list
 			else:
 				print(f"Could not process the URL, code {retcode} and audio file {audio_file_list} and args.output_name {args.output_name}")
 				close(args)
 				exit(-1)
 
 		elif Path(args.filename).exists():
-			args.filename, _ = get_fullpath(os.getcwd(), args.filename)
-			if isVideoFile(args.filename.suffix) == True:
-				video_files.append(str(args.filename))
-			elif isAudioFile(args.filename.suffix) == True:
-				audio_files.append(str(args.filename))
+			args.filename, args.output_dir = get_fullpath(os.getcwd(), args.filename)
+			media_files.append(str(args.filename))
 
 	elif findarg(args, 'input_dir'):
 		if Path(args.input_dir).exists():
 			for filename in os.listdir(args.input_dir):
 				filename = Path(args.input_dir, filename)
-				if filename.is_file() and isVideoFile(filename.suffix) == True:
-					video_files.append(str(filename));
-				elif filename.is_file() and isAudioFile(filename.suffix) == True:
-					audio_files.append(str(filename))
+				if filename.is_file():
+					media_files.append(str(filename));
 		else:
 			raise FileNotFoundError(f"--input_dir argument does not specify a valid dir: {args.input_dir}")
 
 	# did not find any files
-	if len(video_files) + len(audio_files) == 0:
+	if len(media_files) == 0:
 		if args.filename:
 			print("URL is not valid")
 			close(args)
@@ -175,14 +154,13 @@ def add_media_files(args, video_files, audio_files, debug = False, verbose = Fal
 			close(args)
 			exit(0)
 
-	print(f"Media files found {len(video_files) + len(audio_files)}")
+	print(f"Media files found {len(media_files)}")
 
 
 def main():
 
 	global temp_audio_filepath
-	video_files = []
-	audio_files = []
+	media_files = []
 
 	parser = argparse.ArgumentParser("Generates subtitiles of the video file as an input")
 	parser.add_argument("-f", "--filename", help="Name of the media file stored in the filesystem or URL \
@@ -222,24 +200,13 @@ def main():
 
 	temp_audio_filepath = str(Path(args.output_dir, temp_audio_filepath))
 
-	add_media_files(args, video_files, audio_files, debug = not args.quiet, verbose = args.verbose)
+	add_media_files(args, media_files, debug = not args.quiet, verbose = args.verbose)
 	model = initialize(args);
 
 	# convert the videofile into audiofile before processing
-	for videofile in video_files:
+	for media_file in media_files:
 		if args.quiet == False:
-			print(f"Processing file {videofile} and using audio filter")
-
-		audio_processor = AudioProcess(args)
-		audio_processor.extract_audio(input_filepath=videofile, output_filepath=temp_audio_filepath, overwrite=True);
-
-		# output_name is set by setting output_filepath
-		transcribe(args, model, temp_audio_filepath, videofile)
-
-	# convert the audiofile before processing
-	for audiofile in audio_files:
-		if args.quiet == False:
-			print(f"Processing file: {audiofile}")
+			print(f"Processing file {media_file} and using audio filter")
 
 		if args.audio_filter or args.codec or args.bitrate:
 			if args.quiet == False:
@@ -249,13 +216,14 @@ def main():
 				print(f"Bitrate {args.bitrate}")
 
 			audio_processor = AudioProcess(args)
-			audio_processor.extract_audio(input_filepath=audiofile, output_filepath=temp_audio_filepath, overwrite=True);
+			audio_processor.extract_audio(input_filepath=media_file, output_filepath=temp_audio_filepath, overwrite=True);
 
 			# output_name is set by setting output_filepath
-			transcribe(args, model, temp_audio_filepath, audiofile)
+			transcribe(args, model, temp_audio_filepath, media_file)
 
 		else:
-			transcribe(args, model, audiofile)
+			# output_name is set by setting output_filepath
+			transcribe(args, model, media_file)
 
 	# cleanup the audio file that is no longer needed
 	close(args)
