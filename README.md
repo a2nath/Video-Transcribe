@@ -411,7 +411,7 @@ python whisper-gpu.py -f 'Prznt x 2Scratch - Stay [715263370].mp3' --model_size 
 
 ### Increase Robustness and Accuracy (List Supported Sizes)
 
-Consider using a larger `beam_size` hyper-parameter, which as you may be aware increases the time to complete the transcoding. This will probably rectify any issues with spoken languages with an accent that the tiny model stsuggles with. To get supported model sizes of faster-whisper issue the command `-s` or `--model_size`. 
+Consider using a larger `beam_size` hyper-parameter, which as you may be aware increases the time to complete the transcoding. This will probably rectify any issues with spoken languages with an accent that the tiny model struggles with. To get supported model sizes of faster-whisper issue the command `-s` or `--model_size`. 
 
 ```python
 # Call the faster-whisper API to get supported sizes in that version number
