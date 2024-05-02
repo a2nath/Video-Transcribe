@@ -1,4 +1,6 @@
 import os
+import io
+import sys
 from os.path import isfile, join
 import argparse
 import psutil
@@ -36,13 +38,15 @@ def srt_format_timestamp(seconds: float):
 	return (f"{hours}:") + f"{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
 def write_srt(segments, file: TextIO):
+	sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 	print("\nBegin transcription and creating subtitle file:")
 	print("-------------------------------------------------------")
 
 	count = 0
 	for segment in segments:
-		count +=1
+		count += 1
+		# Attempt to write the line to the file
 		print(
 			f"{count}\n"
 			f"{srt_format_timestamp(segment.start)} --> {srt_format_timestamp(segment.end)}\n"
@@ -78,7 +82,7 @@ def transcribe(args, model, full_filepath, filename = None):
 	# save SRT
 	srt_subtitle_filename = join(args.output_dir, Path(filename).stem + "." + time.strftime("%Y%m%d-%H%M%S") + f".{args.language}.srt")
 
-	with open(srt_subtitle_filename, "w") as srt:
+	with open(srt_subtitle_filename, "w", encoding="utf-8") as srt:
 		write_srt(segments, file=srt)
 
 	print(filename," took ","{:.1f}".format(timeit.default_timer() - start_time)," seconds")
@@ -107,8 +111,6 @@ def close(args):
 	if not findarg(args, 'keep') and isfile(temp_audio_filepath):
 		os.remove(temp_audio_filepath)
 
-	if findarg(args, 'filename') and isfile(args.filename):
-		args.filename.close()
 
 def add_media_files(args, media_files, debug = False, verbose = False):
 
@@ -174,7 +176,7 @@ def main():
 	parser.add_argument("-b", "--beam_size", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
 	parser.add_argument("-p", "--precision", help="Precision to use to create the model", type=str, default="auto")
 	parser.add_argument("-d", "--device", help="Device to use such a CPU or GPU", choices=["cpu", "cuda"], default="cuda")
-	parser.add_argument("-s", "--model_size", help="Size of the model, default is small.", choices=sizes_supported(), default="small")
+	parser.add_argument("-s", "--model_size", help="Size of the model, default is small.", choices=sizes_supported(), nargs='?', default="small")
 	parser.add_argument("-n", "--nproc", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
 	parser.add_argument('-k', "--keep", help="Keep intermediate files", action='store_true')
 	parser.add_argument("--verbose", help="Verbose print from dependent processes", action='store_true')
@@ -185,6 +187,17 @@ def main():
 	parser.add_argument("--bitrate", help="Audio bitrate to use")
 
 	args = parser.parse_args()
+
+	# print out the list of possible sizes if no argument is given
+	if 'model_size' in args and getattr(args, 'model_size') is None:
+		supported = sizes_supported()
+		print("\nSupported size in faster-whisper")
+		print("-------------------------------------------------------")
+		for size in supported:
+			print(f"*  {size}");
+		close(args)
+		exit(0)
+
 
 	# make the directory if missing, output_name override output_dir if former has dir already
 	if findarg(args, 'output_name'):
