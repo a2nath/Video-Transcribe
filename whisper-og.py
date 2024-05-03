@@ -7,19 +7,17 @@ import ffmpeg
 import whisper
 import timeit
 import time
+from whisper import available_models
 from pathlib import Path
 from typing import Iterator, TextIO
+from utils.download_best import Download
+import validators
+from utils.get_audio import AudioProcess
 
+temp_audio_filepath = "temp_audio.mp3"
 
-# Note:
-# by default large model is used and float32 precision
-#
-#
-sizes_supported = ["tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3", "large"]
-
-video_supported = [".mkv", ".mov",  ".avi", ".mp4"]
-audio_supported = [".mp3", ".wave", ".aac", ".flac"]
-scrapfile = ""
+def sizes_supported() -> list[str]:
+	return available_models()
 
 def srt_format_timestamp(seconds: float):
 	assert seconds >= 0, "non-negative timestamp expected"
@@ -52,124 +50,185 @@ def write_srt(transcript: Iterator[dict], file: TextIO):
 			flush=True,
 		)
 
-def isVideoFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in video_supported:
-		return True
+def findarg(args, key: str) -> bool:
+	return key in args and getattr(args, key)
 
-	return False
+def get_fullpath(output_dir, output_file) -> tuple[Path, str]:
+	output_filepath = Path(output_file).resolve()
 
-def isAudioFile(file_suffix):
-	file_suffix = file_suffix.lower()
-	if file_suffix in audio_supported:
-		return True
+	if output_filepath.parent != Path(output_dir).resolve():
+		output_dir = output_filepath.parent
+		output_file = Path(output_file).name
 
-	return False
+	return Path(output_dir, output_file), output_dir
 
-def transcribe(args, model, videofile, audiofile = None):
+def transcribe(args, model, full_filepath, filename = None):
+
+	assert type(full_filepath) == str
+
+	if filename is None: # same as path implicitly
+		filename = full_filepath
 
 	start_time = timeit.default_timer()
-
-	if audiofile is None:
-		audiofile = videofile
-
-	segments = model.transcribe(audiofile, verbose=True, beam_size=args.beam_size, language=args.language)
+	segments = model.transcribe(full_filepath, verbose=True, beam_size=args.beam_size, language=args.language)
 
 	# save SRT
-	with open(join(args.output_dir, Path(videofile).stem + "." + time.strftime("%Y%m%d-%H%M%S") + f".{args.language}.srt"), "w") as srt:
+	srt_subtitle_filename = join(args.output_dir, Path(filename).stem + "." + time.strftime("%Y%m%d-%H%M%S") + f".{args.language}.srt")
+
+	with open(srt_subtitle_filename, "w") as srt:
 		write_srt(segments["segments"], file=srt)
 
-	print(videofile," took ","{:.1f}".format(timeit.default_timer() - start_time)," seconds")
+	print(filename," took ","{:.1f}".format(timeit.default_timer() - start_time)," seconds")
 	print("-------------------------------------------------------")
 
 def initialize(args):
 
-	print("\nInitializing:")
-	print("-------------------------------------------------------")
+	print("--------------------INITIALIZING-----------------------")
 
 	# cleanup the audio file that is no longer needed
-	if isfile(scrapfile):
-		os.remove(scrapfile)
+	if isfile(temp_audio_filepath):
+		os.remove(temp_audio_filepath)
 
 	os.environ["OMP_NUM_THREADS"] = str(args.nproc)
 
 
 	# initialize the model with given args
-	model = whisper.load_model(args.model_size, device=args.device)
+	model = whisper.load_model(args.model_size, device='cpu')
 
 	return model;
 
-def close():
+def close(args):
 
-	if isfile(scrapfile):
-		os.remove(scrapfile)
+	if not findarg(args, 'keep') and isfile(temp_audio_filepath):
+		os.remove(temp_audio_filepath)
 
-	print("Done.")
+	if findarg(args, 'filename') and isfile(args.filename):
+		args.filename.close()
+
+def add_media_files(args, media_files, debug = False, verbose = False):
+
+	if findarg(args, 'filename'):
+		if validators.url(args.filename):
+			args.url         = args.filename
+			args.audio_only  = True
+			args.restrict_filenames   = True
+			args.overwrite            = True
+			args.verbose              = False
+			args.audio_format         = 'mp3'
+
+			download = Download(args, debug)
+			audio_file_list, retcode = download.run()
+
+			if retcode == 0:# and audio_file_list == args.output_name:
+				media_files += audio_file_list
+			else:
+				print(f"Could not process the URL, code {retcode} and audio file {audio_file_list} and args.output_name {args.output_name}")
+				close(args)
+				exit(-1)
+
+		elif Path(args.filename).exists():
+			args.filename, args.output_dir = get_fullpath(os.getcwd(), args.filename)
+			media_files.append(str(args.filename))
+
+	elif findarg(args, 'input_dir'):
+		if Path(args.input_dir).exists():
+			for filename in os.listdir(args.input_dir):
+				filename = Path(args.input_dir, filename)
+				if filename.is_file():
+					media_files.append(str(filename));
+		else:
+			raise FileNotFoundError(f"--input_dir argument does not specify a valid dir: {args.input_dir}")
+
+	# did not find any files
+	if len(media_files) == 0:
+		if args.filename:
+			print("URL is not valid")
+			close(args)
+			exit(-1)
+		else:
+			print("There were no media to process")
+			close(args)
+			exit(0)
+
+	print(f"Media files found {len(media_files)}")
+
 
 def main():
 
-	video_files = []
-	audio_files = []
+	global temp_audio_filepath
+	media_files = []
 
 	parser = argparse.ArgumentParser("Generates subtitiles of the video file as an input")
-	parser.add_argument("--input_dir", "-i", help="Input directory where video files are", default=os.getcwd())
-	parser.add_argument("--filename", "-f", help="Name of the video file that needs to subtitles", type=argparse.FileType('r', encoding='UTF-8'))
-	parser.add_argument("--output_dir", "-o", help="Ouput directory", default=os.getcwd())
-	parser.add_argument("--language", "-l", help="Language to be translated from", default='en', type=str)
-	parser.add_argument("--beam_size", "-b", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
-	parser.add_argument("--device", "-d", help="Device to use such a CPU or GPU", choices=["cpu", "cuda"], default="cpu")
-	parser.add_argument("--model_size", "-s", help="Size of the model, default is large.", choices=sizes_supported, default="small")
-	parser.add_argument("--nproc", "-n", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
+	parser.add_argument("-f", "--filename", help="Name of the media file stored in the filesystem or URL \
+						of a video/audio file that needs to subtitles. URL can also be a list of media")
+	parser.add_argument("-i", "--input_dir", help="Input directory where video files are. --filename overrides this")
+	parser.add_argument("-af", "--audio_filter", help="Audio or video filters to use before transcription \
+						(for ffmpeg), no spaces, just comma-separated")
+	parser.add_argument("-o", "--output_name", help="Output filename in case of issues with title")
+	parser.add_argument("-od", "--output_dir", help="Ouput directory", default=os.getcwd())
+	parser.add_argument("-l", "--language", help="Language to be translated from", default='en', type=str)
+	parser.add_argument("-b", "--beam_size", help="Beam size parameter or best_of equivalent from Open-AI whisper", type=int, default=5)
+	parser.add_argument("-s", "--model_size", help="Size of the model, default is small.", choices=sizes_supported(), nargs='?', default="small")
+	parser.add_argument("-n", "--nproc", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
+	parser.add_argument('-k', "--keep", help="Keep intermediate files", action='store_true')
+	parser.add_argument("--verbose", help="Verbose print from dependent processes", action='store_true')
+	parser.add_argument("--quiet", help="Debug print off", action='store_true')
+	parser.add_argument("--playlist_start", help="Starting position from a list of media, to start downloading from")
+	parser.add_argument("--playlist_end", help="Ending position from a list of media, to stop downloading at")
 
 	args = parser.parse_args()
-	args.input_dir = str(Path(args.input_dir).resolve())
 
-	# make the directory if missing
-	Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-	scrapfile = str(Path(args.output_dir, "output.mp3"))
-
-	if args.filename is not None:
-		args.filename = Path(args.input_dir, args.filename.name)
-		if isVideoFile(args.filename.suffix) == True:
-			video_files.append(str(args.filename))
-		elif isAudioFile(args.filename.suffix) == True:
-			audio_files.append(str(args.filename))
-
-	elif args.input_dir is not None:
-		for filename in os.listdir(args.input_dir):
-			filename = Path(args.input_dir, filename)
-			if filename.is_file() and isVideoFile(filename.suffix) == True:
-				video_files.append(str(filename));
-			elif filename.is_file() and isAudioFile(filename.suffix) == True:
-				audio_files.append(str(filename));
-
-	if len(video_files) == 0 and len(audio_files) == 0:
-		print("There were no files to process")
+	# print out the list of possible sizes if no argument is given
+	if 'model_size' in args and getattr(args, 'model_size') is None:
+		supported = sizes_supported()
+		print("\nSupported size in faster-whisper")
+		print("-------------------------------------------------------")
+		for size in supported:
+			print(f"*  {size}");
+		close(args)
 		exit(0)
-	else:
-		print("Found ", len(video_files)+len(audio_files), " files")
 
-	print("\nSettings as follows:")
-	print("-------------------------------------------------------")
 
-	arguments = vars(args);
-	for arg in arguments:
-		print(arg, '\t', getattr(args, arg))
+	# make the directory if missing, output_name override output_dir if former has dir already
+	if findarg(args, 'output_name'):
+		args.output_name, args.output_dir = get_fullpath(args.output_dir, args.output_name)
+	Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
+	# print out the settings, some of them belongs to dependent scripts such as downloader or get-audio
+	if args.quiet == False:
+		print("-----------------------SETTINGS------------------------")
+		arguments = vars(args)
+		for arg in arguments:
+			print(arg, '\t', getattr(args, arg))
+
+	temp_audio_filepath = str(Path(args.output_dir, temp_audio_filepath))
+
+	add_media_files(args, media_files, debug = not args.quiet, verbose = args.verbose)
 	model = initialize(args);
 
 	# convert the videofile into audiofile before processing
-	for videoFile in video_files:
-		ffmpeg.input(videoFile).output(scrapfile).run(overwrite_output=True)
-		transcribe(args, model, videoFile, scrapfile)
+	for media_file in media_files:
+		if args.quiet == False:
+			print(f"Processing file {media_file} and using audio filter")
 
-	# convert the audiofile before processing
-	for audiofile in audio_files:
-		transcribe(args, model, audiofile)
+		if args.audio_filter:
+			if args.quiet == False:
+				print(f"File {audiofile}")
+				print(f"Filter {args.audio_filter}")
 
+			audio_processor = AudioProcess(args)
+			audio_processor.extract_audio(input_filepath=media_file, output_filepath=temp_audio_filepath, overwrite=True);
+
+			# output_name is set by setting output_filepath
+			transcribe(args, model, temp_audio_filepath, media_file)
+
+		else:
+			# output_name is set by setting output_filepath
+			transcribe(args, model, media_file)
 
 	# cleanup the audio file that is no longer needed
-	close()
+	close(args)
+	print("Done.")
 
 	return 0
 
