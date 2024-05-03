@@ -1,6 +1,4 @@
 import os
-import io
-import sys
 from os.path import isfile, join
 import argparse
 import psutil
@@ -37,7 +35,6 @@ def srt_format_timestamp(seconds: float):
 	return (f"{hours}:") + f"{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
 def write_srt(segments, file: TextIO):
-	sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 	print("\nBegin transcription and creating subtitle file:")
 	print("-------------------------------------------------------")
@@ -114,11 +111,12 @@ def add_media_files(args, media_files, debug = False, verbose = False):
 
 	if findarg(args, 'filename'):
 		if validators.url(args.filename):
-			args.url         = args.filename
-			args.audio_only  = True
-			args.overwrite   = True
-			args.verbose     = False
-			args.format      = 'mp3'
+			args.url                  = args.filename
+			args.audio_only           = True
+			args.restrict_filenames   = True
+			args.overwrite            = True
+			args.verbose              = False
+			args.audio_format         = 'mp3'
 
 			download = Download(args, debug)
 			audio_file_list, retcode = download.run()

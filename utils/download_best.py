@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path, PurePath
 import timeit
 import pdb
+import io
+import sys
 
 default_model_bin        = "yt-dlp.exe"
 default_get_best_format  = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
@@ -110,6 +112,12 @@ class Download:
 		if self.findarg(args, 'playlist_end'):
 			self.opts += ["--playlist-end", args.playlist_end]
 
+		if self.findarg(args, 'audio_format'):
+			self.opts += ["--extract-audio", "--audio-format", args.audio_format]
+
+		if self.findarg(args, 'restrict_filenames'):
+			self.opts += ["--restrict-filenames"]
+
 		if self.findarg(args, 'timeout'):
 			self.timeout = args.timeout
 
@@ -123,7 +131,7 @@ class Download:
 		if self.filepath:
 			self.opts += ["-o", str(self.filepath)]
 
-		process = subprocess.Popen([self.model_bin] + self.opts, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
+		process = subprocess.Popen([self.model_bin] + self.opts, encoding="utf8", stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
 
 		if self.debug_flag == True:
 			print(f"Parameters: {self.opts}\n")
@@ -133,24 +141,27 @@ class Download:
 		start_time = timeit.default_timer()
 
 		while True:
-			stdout_line_bytes = process.stdout.readline()
-			if not stdout_line_bytes and process.poll() is not None:
+			stdout_line_str = process.stdout.readline()
+			if not stdout_line_str and process.poll() is not None:
 				break
 
-			elif not stdout_line_bytes:
-				stderr_line = process.stderr.readline()
-				if stderr_line:
-					print(stderr_line.decode('utf-8').rstrip())
-				break
+			elif not stdout_line_str:
+				while True:
+					stdout_line_str = process.stderr.readline()
+
+					if not stdout_line_str and process.poll() is not None:
+						break
+
+					if stdout_line_str:
+						print(stdout_line_str.rstrip())
+					break
 
 			try:
-				# Attempt to decode the line as UTF-8
-				stdout_line = stdout_line_bytes.decode('utf-8')
-				stdout_line = stdout_line.rstrip()
+				stdout_line_str = stdout_line_str.rstrip()
 			except UnicodeDecodeError as e:
 				# Handle decoding error gracefully
 				print(f"Error decoding line from stdout: {e}")
-				print(f"Problematic byte sequence: {stdout_line_bytes}")
+				print(f"Problematic byte sequence: {stdout_line_str}")
 				continue
 			except KeyboardInterrupt:
 				process.kill()
@@ -160,30 +171,34 @@ class Download:
 
 			# if just listing the formats, then stop here
 			if "-F" in self.opts:
-				print(stdout_line, flush=True)
+				print(stdout_line_str, flush=True)
 				continue;
 			#out, err = process.communicate() #blocking process
 
 			# Read and print the output line by line
 			merger_pattern     = "[Merger] Merging formats into \""
 			download_pattern   = "[download] Destination: "
+			post_audio_fix_pattern   = "[ExtractAudio] Destination: "
 			downloaded_pattern = " has already been downloaded"
 
-			if stdout_line:
-				if stdout_line.startswith(merger_pattern):
-					output_file = stdout_line[len(merger_pattern):-1]
+			if stdout_line_str:
+				if stdout_line_str.startswith(merger_pattern):
+					output_file = stdout_line_str[len(merger_pattern):-1]
 
-				elif output_file == '' and stdout_line.startswith(download_pattern):
-					output_file = stdout_line[len(download_pattern):]
+				elif stdout_line_str.startswith(post_audio_fix_pattern):
+					output_file = stdout_line_str[len(post_audio_fix_pattern):]
 
-				elif output_file == '' and downloaded_pattern in stdout_line:
-					output_file = stdout_line[len("[download] "):stdout_line.index(downloaded_pattern)]
+				elif output_file == '' and stdout_line_str.startswith(download_pattern):
+					output_file = stdout_line_str[len(download_pattern):]
 
-				if output_file and 'Extracting URL:' in stdout_line:
+				elif output_file == '' and downloaded_pattern in stdout_line_str:
+					output_file = stdout_line_str[len("[download] "):stdout_line_str.index(downloaded_pattern)]
+
+				if output_file and 'Extracting URL:' in stdout_line_str:
 					media_list.append(output_file)
 					output_file = ''
 
-				print(stdout_line, flush=True)
+				print(stdout_line_str, flush=True)
 
 			if self.timeout is not None and float(timeit.default_timer() - start_time) > float(self.timeout):
 				process.kill()
@@ -286,6 +301,8 @@ def main():
 	parser.add_argument("--timeout", help="Amount of time to wait for the download to finish (seconds)")
 	parser.add_argument("--playlist_start", help="Starting position from a list of media, to start downloading from")
 	parser.add_argument("--playlist_end", help="Ending position from a list of media, to stop downloading at")
+	parser.add_argument("--audio_format", help="Specify the audio format to use in post-processing", action='store_true')
+	parser.add_argument("--restrict_filenames", help="Restrict filenames to only ASCII characters, and avoid '&' and spaces in filenames", action='store_true')
 
 	args = parser.parse_args()
 	downloader = Download(args, debug=not args.quiet)
