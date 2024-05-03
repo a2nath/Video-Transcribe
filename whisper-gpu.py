@@ -11,10 +11,9 @@ from faster_whisper import WhisperModel as whisper
 from faster_whisper.utils import available_models
 from pathlib import Path
 from typing import Iterator, TextIO
-from download_best import Download
+from utils.download_best import Download
 import validators
-from download_best import Download
-from get_audio import AudioProcess
+from utils.get_audio import AudioProcess
 import pdb
 
 temp_audio_filepath = "temp_audio.mp3"
@@ -46,7 +45,6 @@ def write_srt(segments, file: TextIO):
 	count = 0
 	for segment in segments:
 		count += 1
-		# Attempt to write the line to the file
 		print(
 			f"{count}\n"
 			f"{srt_format_timestamp(segment.start)} --> {srt_format_timestamp(segment.end)}\n"
