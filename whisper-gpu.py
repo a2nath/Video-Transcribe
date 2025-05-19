@@ -14,7 +14,7 @@ import validators
 from utils.get_audio import AudioProcess
 import pdb
 
-temp_audio_filepath = "temp_audio.mp3"
+audio_file = "intermediate_audio_file.mp3"
 
 def sizes_supported() -> list[str]:
 	return available_models()
@@ -88,8 +88,8 @@ def initialize(args):
 	print("--------------------INITIALIZING-----------------------")
 
 	# cleanup the audio file that is no longer needed
-	if isfile(temp_audio_filepath):
-		os.remove(temp_audio_filepath)
+	if isfile(audio_file):
+		os.remove(audio_file)
 
 	# initialize the model with given args
 	if args.device != "cuda":
@@ -103,8 +103,9 @@ def initialize(args):
 
 def close(args):
 
-	if not findarg(args, 'keep') and isfile(temp_audio_filepath):
-		os.remove(temp_audio_filepath)
+	if not findarg(args, 'keep') and isfile(audio_file):
+		print("Delete temp file")
+		os.remove(audio_file)
 
 
 def add_media_files(args, media_files, debug = False, verbose = False):
@@ -157,7 +158,7 @@ def add_media_files(args, media_files, debug = False, verbose = False):
 
 def main():
 
-	global temp_audio_filepath
+	global audio_file
 	media_files = []
 
 	parser = argparse.ArgumentParser("Generates subtitiles of the video file as an input")
@@ -173,6 +174,8 @@ def main():
 	parser.add_argument("-p", "--precision", help="Precision to use to create the model", type=str, default="auto")
 	parser.add_argument("-d", "--device", help="Device to use such a CPU or GPU", choices=["cpu", "cuda"], default="cuda")
 	parser.add_argument("-s", "--model_size", help="Size of the model, default is small.", choices=sizes_supported(), nargs='?', default="small")
+	parser.add_argument("--start", help="Start time in 00:00:00 format", type=AudioProcess.valid_time)
+	parser.add_argument("--end", help="End time in 00:00:00 format", type=AudioProcess.valid_time)
 	parser.add_argument("-n", "--nproc", help="Number of CPUs to use", default=psutil.cpu_count(logical=False), type=int)
 	parser.add_argument('-k', "--keep", help="Keep intermediate files", action='store_true')
 	parser.add_argument("--verbose", help="Verbose print from dependent processes", action='store_true')
@@ -207,7 +210,8 @@ def main():
 		for arg in arguments:
 			print(arg, '\t', getattr(args, arg))
 
-	temp_audio_filepath = str(Path(args.output_dir, temp_audio_filepath))
+	audio_file = str(Path(args.output_dir, audio_file))
+	print(f"audio_file={audio_file}")
 
 	add_media_files(args, media_files, debug = not args.quiet, verbose = args.verbose)
 	model = initialize(args);
@@ -229,14 +233,14 @@ def main():
 
 		if not audio_processor.audio_only(media_file) or findarg(args, 'start') or findarg(args, 'end') or findarg(args, 'codec') or findarg(args, 'bitrate'):
 			print("Extracting audio")
-			audio_processor.extract_audio(input_filepath=media_file, output_filepath=temp_audio_filepath, overwrite=True)
+			audio_processor.extract_audio(input_filepath=media_file, output_filepath=audio_file, overwrite=True)
 
 			new_name = Path(media_file).stem
-			if isfile(new_name + Path(temp_audio_filepath).suffix):
+			if isfile(new_name + Path(audio_file).suffix):
 				new_name += '_2'
-			new_name += Path(temp_audio_filepath).suffix
+			new_name += Path(audio_file).suffix
 
-			os.rename(temp_audio_filepath, new_name)
+			os.rename(audio_file, new_name)
 			media_file = new_name # pointer to the new output file
 
 		transcribe(args, model, media_file)
