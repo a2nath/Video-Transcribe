@@ -47,6 +47,7 @@ class Download:
 	# Input: str:output_dir, str:output_file
 	# Return: Path:output_dir/output_file
 	# Info: if output_file has a path, it overrides output_dir
+
 	def findarg(self, args, key: str) -> bool:
 		return key in args and getattr(args, key)
 
@@ -86,9 +87,14 @@ class Download:
 		if self.findarg(args, 'output_name'):
 			self.filepath, self.output_dir = self.get_fullpath(self.output_dir, args.output_name)
 			Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+
 		elif self.findarg(args, 'output_dir'):
 			self.output_dir = Path(args.output_dir).resolve()
 			Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+
+			# need this for proper handle to file(s)
+			self.opts += ["--restrict-filenames"]
+
 
 		if self.findarg(args, 'verbose'):
 			self.opts += ["--verbose"]
