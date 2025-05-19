@@ -34,6 +34,10 @@ nproc            8
 keep             False
 verbose          False
 quiet            False
+start            None
+end              None
+codec            None
+bitrate          None
 playlist_start   None
 playlist_end     10
 ---------------------DOWNLOADING-----------------------
