@@ -142,6 +142,18 @@ class AudioProcess:
 
 		return completed, remaining
 
+	# is the file audio-only?
+	def audio_only(self, filename):
+		try:
+			probe = ffmpeg.probe(filename)
+			for stream in probe['streams']:
+				if stream['codec_type'] == 'video':
+					return False  # Found a video stream
+			return True  # No video stream found
+		except ffmpeg.Error as e:
+			print(f"FFmpeg error: {e}")
+			return False
+
 	def __init__(self, args):
 		self.media_files = []
 		self.opts = args

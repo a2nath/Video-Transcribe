@@ -224,15 +224,22 @@ def main():
 				print(f"Codec {args.codec}")
 				print(f"Bitrate {args.bitrate}")
 
-			audio_processor = AudioProcess(args)
-			audio_processor.extract_audio(input_filepath=media_file, output_filepath=temp_audio_filepath, overwrite=True);
 
-			# output_name is set by setting output_filepath
-			transcribe(args, model, temp_audio_filepath, media_file)
+		audio_processor = AudioProcess(args)
 
-		else:
-			# output_name is set by setting output_filepath
-			transcribe(args, model, media_file)
+		if not audio_processor.audio_only(media_file) or findarg(args, 'start') or findarg(args, 'end') or findarg(args, 'codec') or findarg(args, 'bitrate'):
+			print("Extracting audio")
+			audio_processor.extract_audio(input_filepath=media_file, output_filepath=temp_audio_filepath, overwrite=True)
+
+			new_name = Path(media_file).stem
+			if isfile(new_name + Path(temp_audio_filepath).suffix):
+				new_name += '_2'
+			new_name += Path(temp_audio_filepath).suffix
+
+			os.rename(temp_audio_filepath, new_name)
+			media_file = new_name # pointer to the new output file
+
+		transcribe(args, model, media_file)
 
 	# cleanup the audio file that is no longer needed
 	close(args)
